@@ -6,72 +6,75 @@ from tkinter import messagebox, ttk
 
 # --- FUNCIONES DE LÓGICA DE IMAGEN ---
 
-def generar_imagen_marcado(texto_qr, texto_lateral=None):
-    """Genera la imagen en blanco y negro optimizada para la L4Pro."""
-    ancho_total = 1000
-    alto_total = 1000
-    margen = 50
-    ancho_qr = (ancho_total // 2) - (2 * margen)
-    ancho_texto = ancho_total - ancho_qr - (3 * margen)
-
-    # Configuración del QR
+def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
+    """Genera la imagen optimizada para la L4Pro con el QR arriba y el texto gigante centrado abajo."""
+    # El lienzo siempre es cuadrado según las especificaciones del láser
+    ancho_total = resolucion
+    alto_total = resolucion
+    
+    # --- CONFIGURACIÓN DEL QR ---
+    # Usamos versión 2 y corrección L para bloques grandes (máxima velocidad de marcado)
     qr = qrcode.QRCode(
-        version=1,
+        version=2,
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=15,
-        border=4,
+        box_size=int(resolucion * 0.015), 
+        border=1, # Menor borde para aprovechar más el espacio
     )
     qr.add_data(texto_qr)
     qr.make(fit=True)
-    img_qr_pil = qr.make_image(fill_color="black", back_color="white").convert('L')
-    img_qr_pil = img_qr_pil.resize((ancho_qr, ancho_qr), resample=Image.NEAREST)
 
+    # Generar el QR directamente en escala de grises ('L') para evitar errores de conversión
+    img_qr_pil = qr.make_image(fill_color="black", back_color="white").convert("L")
+    
+    # El QR ocupará el 75% del alto total del lienzo cuadrado
+    alto_destinado_qr = int(alto_total * 0.75)
+    img_qr_pil = img_qr_pil.resize((alto_destinado_qr, alto_destinado_qr), resample=Image.NEAREST)
+    
     # Lienzo final en escala de grises (255 = Blanco)
     imagen_final = Image.new('L', (ancho_total, alto_total), color=255)
-    imagen_final.paste(img_qr_pil, (margen, margen))
+    
+    # Centrar el QR horizontalmente en la parte superior
+    x_qr = (ancho_total - alto_destinado_qr) // 2
+    y_qr = int(alto_total * 0.02) # Un pequeño margen del 2% arriba
+    imagen_final.paste(img_qr_pil, (x_qr, y_qr))
 
-    # Renderizado del texto lateral si existe
-    if texto_lateral:
+    # --- RENDERIZADO DEL TEXTO GIGANTE ABAJO ---
+    if texto_abajo:
         draw = ImageDraw.Draw(imagen_final)
+        
+        # Súper fuente: 11% de la resolución total (alrededor de 110px si la resolución es 1000)
+        # Esto hace que el texto sea masivo y ultra legible para el operador
+        tamanio_fuente = int(resolucion * 0.11)
+        
         try:
-            # Buscando fuentes estándar del sistema
             font_path = "arial.ttf" 
-            font = ImageFont.truetype(font_path, size=55)
+            font = ImageFont.truetype(font_path, size=tamanio_fuente)
         except IOError:
             font = ImageFont.load_default()
 
-        # Ajuste de línea automático (Word Wrap)
-        lines = []
-        words = texto_lateral.split(' ')
-        current_line = []
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            # Compatibilidad con versiones de Pillow antiguas y nuevas
-            try:
-                w = draw.textlength(test_line, font=font)
-            except AttributeError:
-                w = font.getsize(test_line)[0]
+        # Limpiamos el texto eliminando saltos de línea innecesarios
+        texto_limpio = texto_abajo.replace('\n', ' ').replace('\r', ' ').strip()
+        
+        # Calcular el tamaño exacto del texto para centrarlo perfectamente
+        try:
+            bbox = draw.textbbox((0, 0), texto_limpio, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        except AttributeError:
+            # Soporte para versiones antiguas de Pillow
+            text_width, text_height = font.getsize(texto_limpio)
 
-            if w <= ancho_texto:
-                current_line.append(word)
-            else:
-                lines.append(' '.join(current_line))
-                current_line = [word]
-        if current_line:
-            lines.append(' '.join(current_line))
+        # Posición X: Centrado matemático horizontal
+        x_texto = (ancho_total - text_width) // 2
+        
+        # Posición Y: En el centro del 25% de espacio restante abajo
+        espacio_restante_y = alto_total - (y_qr + alto_destinado_qr)
+        y_texto = (y_qr + alto_destinado_qr) + (espacio_restante_y - text_height) // 2 - int(resolucion * 0.02)
 
-        # Dibujar texto
-        x_texto = ancho_qr + (2 * margen)
-        y_texto = margen
-        line_height = 70 
-
-        for line in lines:
-            draw.text((x_texto, y_texto), line, fill=0, font=font)
-            y_texto += line_height
+        # Dibujar el texto en negro puro (0)
+        draw.text((x_texto, y_texto), texto_limpio, fill=0, font=font)
 
     return imagen_final
-
-
 # --- FUNCIÓN DEL BOTÓN GENERAR ---
 
 def procesar_y_guardar():
