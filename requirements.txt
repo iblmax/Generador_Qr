@@ -1,0 +1,4 @@
+# Librerías necesarias para el Generador de Códigos QR para Láser L4Pro
+streamlit>=1.30.0
+qrcode[pil]>=7.4.2
+Pillow>=10.0.0
