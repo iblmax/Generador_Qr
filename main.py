@@ -13,75 +13,88 @@ st.set_page_config(
 
 # --- LÓGICA DE GENERACIÓN DE IMAGEN ---
 def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
-    """Genera la imagen optimizada para la L4Pro con el QR arriba y el texto gigante centrado abajo."""
-    # El lienzo siempre es cuadrado según las especificaciones del láser
+    """Genera una imagen con fondo blanco real, QR centrado arriba y texto gigante abajo."""
     ancho_total = resolucion
     alto_total = resolucion
     
-    # --- CONFIGURACIÓN DEL QR ---
-    # Usamos versión 2 y corrección L para bloques grandes (máxima velocidad de marcado)
+    # 1. LIENZO FINAL CON FONDO BLANCO PURO REAL ('L' = 255 es blanco, sin transparencias)
+    imagen_final = Image.new('L', (ancho_total, alto_total), color=255)
+    
+    # 2. CONFIGURACIÓN DEL QR
     qr = qrcode.QRCode(
-        version=2,
+        version=None, # Permitir que calcule el tamaño óptimo automáticamente
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=int(resolucion * 0.015), 
-        border=1, # Menor borde para aprovechar más el espacio
+        box_size=10, 
+        border=2,
     )
     qr.add_data(texto_qr)
     qr.make(fit=True)
 
-    # Generar el QR directamente en escala de grises ('L') para evitar errores de conversión
+    # Generar el QR en blanco y negro puro
     img_qr_pil = qr.make_image(fill_color="black", back_color="white").convert("L")
     
-    # El QR ocupará el 75% del alto total del lienzo cuadrado
-    alto_destinado_qr = int(alto_total * 0.75)
-    img_qr_pil = img_qr_pil.resize((alto_destinado_qr, alto_destinado_qr), resample=Image.NEAREST)
+    # Forzar a que el QR ocupe el 65% del tamaño para dejar suficiente espacio al texto abajo
+    tamano_qr = int(alto_total * 0.65)
+    img_qr_pil = img_qr_pil.resize((tamano_qr, tamano_qr), resample=Image.NEAREST)
     
-    # Lienzo final en escala de grises (255 = Blanco)
-    imagen_final = Image.new('L', (ancho_total, alto_total), color=255)
-    
-    # Centrar el QR horizontalmente en la parte superior
-    x_qr = (ancho_total - alto_destinado_qr) // 2
-    y_qr = int(alto_total * 0.02) # Un pequeño margen del 2% arriba
+    # Centrar el QR horizontalmente en la mitad superior
+    x_qr = (ancho_total - tamano_qr) // 2
+    y_qr = int(alto_total * 0.05) # Margen superior del 5%
     imagen_final.paste(img_qr_pil, (x_qr, y_qr))
 
-    # --- RENDERIZADO DEL TEXTO GIGANTE ABAJO ---
+    # 3. RENDERIZADO DEL TEXTO INFERIOR
     if texto_abajo:
         draw = ImageDraw.Draw(imagen_final)
         
-        # Súper fuente: 11% de la resolución total (alrededor de 110px si la resolución es 1000)
-        # Esto hace que el texto sea masivo y ultra legible para el operador
-        tamanio_fuente = int(resolucion * 0.11)
+        # Tamaño de fuente masivo (10% de la resolución del lienzo)
+        tamanio_fuente = int(resolucion * 0.10)
         
         try:
+            # Intentar cargar Arial, si no, usar la de por defecto
             font_path = "arial.ttf" 
             font = ImageFont.truetype(font_path, size=tamanio_fuente)
         except IOError:
             font = ImageFont.load_default()
 
-        # Limpiamos el texto eliminando saltos de línea innecesarios
+        # Limpiar saltos de línea para que entre en una sola tira horizontal
         texto_limpio = texto_abajo.replace('\n', ' ').replace('\r', ' ').strip()
         
-        # Calcular el tamaño exacto del texto para centrarlo perfectamente
+        # Calcular dimensiones exactas para el centrado
         try:
             bbox = draw.textbbox((0, 0), texto_limpio, font=font)
             text_width = bbox[2] - bbox[0]
             text_height = bbox[3] - bbox[1]
         except AttributeError:
-            # Soporte para versiones antiguas de Pillow
             text_width, text_height = font.getsize(texto_limpio)
 
-        # Posición X: Centrado matemático horizontal
+        # Si el texto es demasiado largo y se sale de la pantalla, achicar la fuente dinámicamente
+        while text_width > (ancho_total * 0.95) and tamanio_fuente > 20:
+            tamanio_fuente -= 5
+            try:
+                font = ImageFont.truetype("arial.ttf", size=tamanio_fuente)
+                bbox = draw.textbbox((0, 0), texto_limpio, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+            except:
+                break
+
+        # Posición X: Centrado matemático absoluto
         x_texto = (ancho_total - text_width) // 2
         
-        # Posición Y: En el centro del 25% de espacio restante abajo
-        espacio_restante_y = alto_total - (y_qr + alto_destinado_qr)
-        y_texto = (y_qr + alto_destinado_qr) + (espacio_restante_y - text_height) // 2 - int(resolucion * 0.02)
+        # Posición Y: Ubicado firmemente en el espacio inferior restante
+        y_texto = int(alto_total * 0.78) 
 
-        # Dibujar el texto en negro puro (0)
+        # Dibujar el texto en negro puro (0) sobre el fondo blanco
         draw.text((x_texto, y_texto), texto_limpio, fill=0, font=font)
 
     return imagen_final
-# --- INTERFAZ DE USUARIO (STREAMLIT) ---
+
+
+
+
+
+
+
 
 st.title("⚡ Generador de Códigos para L4Pro")
 st.subheader("Configuración de Marcado de Tanques Especiales")
