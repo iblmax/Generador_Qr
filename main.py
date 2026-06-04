@@ -12,20 +12,24 @@ st.set_page_config(
 )
 
 # --- LÓGICA DE GENERACIÓN DE IMAGEN ---
-def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
-    """Genera una imagen con fondo blanco real, QR centrado arriba y texto gigante abajo."""
-    ancho_total = resolucion
-    alto_total = resolucion
+def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=472):
+    """
+    Genera una imagen de 472x472 px, que a 300 DPI equivale exactamente 
+    a 4 cm x 4 cm físicos, optimizada con fondo blanco real para la L4Pro.
+    """
+    # Forzamos a que el lienzo sea de 472x472 píxeles (4cm x 4cm)
+    ancho_total = 472
+    alto_total = 472
     
-    # 1. LIENZO FINAL CON FONDO BLANCO PURO REAL ('L' = 255 es blanco, sin transparencias)
+    # 1. LIENZO CON FONDO BLANCO PURO REAL ('L' = 255 es blanco, sin transparencias)
     imagen_final = Image.new('L', (ancho_total, alto_total), color=255)
     
     # 2. CONFIGURACIÓN DEL QR
     qr = qrcode.QRCode(
-        version=None, # Permitir que calcule el tamaño óptimo automáticamente
+        version=None, # Calcula automáticamente el tamaño según el texto
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=10, 
-        border=2,
+        box_size=6,   # Bloques más pequeños para que quepa bien en 4 cm
+        border=1,     # Borde mínimo para aprovechar el espacio de 4 cm
     )
     qr.add_data(texto_qr)
     qr.make(fit=True)
@@ -33,7 +37,7 @@ def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
     # Generar el QR en blanco y negro puro
     img_qr_pil = qr.make_image(fill_color="black", back_color="white").convert("L")
     
-    # Forzar a que el QR ocupe el 65% del tamaño para dejar suficiente espacio al texto abajo
+    # El QR ocupará el 65% del espacio vertical (unos 300 px) para dejar espacio abajo
     tamano_qr = int(alto_total * 0.65)
     img_qr_pil = img_qr_pil.resize((tamano_qr, tamano_qr), resample=Image.NEAREST)
     
@@ -46,11 +50,10 @@ def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
     if texto_abajo:
         draw = ImageDraw.Draw(imagen_final)
         
-        # Tamaño de fuente masivo (10% de la resolución del lienzo)
-        tamanio_fuente = int(resolucion * 0.10)
+        # Tamaño de fuente proporcional para el lienzo de 4cm (aprox. 45px de alto)
+        tamanio_fuente = int(resolucion * 0.095)
         
         try:
-            # Intentar cargar Arial, si no, usar la de por defecto
             font_path = "arial.ttf" 
             font = ImageFont.truetype(font_path, size=tamanio_fuente)
         except IOError:
@@ -67,9 +70,9 @@ def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
         except AttributeError:
             text_width, text_height = font.getsize(texto_limpio)
 
-        # Si el texto es demasiado largo y se sale de la pantalla, achicar la fuente dinámicamente
-        while text_width > (ancho_total * 0.95) and tamanio_fuente > 20:
-            tamanio_fuente -= 5
+        # Reducir la fuente dinámicamente si el texto es muy largo para los 4 cm
+        while text_width > (ancho_total * 0.95) and tamanio_fuente > 12:
+            tamanio_fuente -= 2
             try:
                 font = ImageFont.truetype("arial.ttf", size=tamanio_fuente)
                 bbox = draw.textbbox((0, 0), texto_limpio, font=font)
@@ -82,7 +85,7 @@ def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=1000):
         x_texto = (ancho_total - text_width) // 2
         
         # Posición Y: Ubicado firmemente en el espacio inferior restante
-        y_texto = int(alto_total * 0.78) 
+        y_texto = int(alto_total * 0.76) 
 
         # Dibujar el texto en negro puro (0) sobre el fondo blanco
         draw.text((x_texto, y_texto), texto_limpio, fill=0, font=font)
