@@ -14,127 +14,69 @@ st.set_page_config(
 # --- LÓGICA DE GENERACIÓN DE IMAGEN ---
  
 =======
-def generar_imagen_marcado(texto_qr, texto_abajo=None, resolucion=472):
-    """
-    Genera una imagen de 472x472 px, que a 300 DPI equivale exactamente 
-    a 4 cm x 4 cm físicos, optimizada con fondo blanco real para la L4Pro.
-    """
-    # Forzamos a que el lienzo sea de 472x472 píxeles (4cm x 4cm)
-    ancho_total = 472
-    alto_total = 472
-    
-    # 1. LIENZO CON FONDO BLANCO PURO REAL ('L' = 255 es blanco, sin transparencias)
-    imagen_final = Image.new('L', (ancho_total, alto_total), color=255)
-    
-    # 2. CONFIGURACIÓN DEL QR
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
+def generar_imagen_marcado(texto_qr, texto_abajo=None):
+    """Genera una imagen compacta uniendo QR y texto para evitar el auto-recorte."""
+    # 1. Configurar y generar el QR base
     qr = qrcode.QRCode(
-<<<<<<< HEAD
         version=None,
-=======
-        version=None, # Calcula automáticamente el tamaño según el texto
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
         error_correction=qrcode.constants.ERROR_CORRECT_L,
-<<<<<<< HEAD
-        box_size=12,  # Bloques grandes para que el láser marque rápido
-        border=1,     # Borde mínimo para que la pistola no recorte de más
-=======
-        box_size=6,   # Bloques más pequeños para que quepa bien en 4 cm
-        border=1,     # Borde mínimo para aprovechar el espacio de 4 cm
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
+        box_size=12,  # Bloques definidos para el sensor láser
+        border=1,     # Margen mínimo para que queden pegados
     )
     qr.add_data(texto_qr)
     qr.make(fit=True)
     
-    # QR en escala de grises limpia
+    # QR en modo monocromático ('L')
     img_qr = qr.make_image(fill_color="black", back_color="white").convert("L")
     ancho_qr, alto_qr = img_qr.size
 
-    # 2. Calcular el espacio para el texto gigante pegado abajo
-    alto_texto_destinado = int(alto_qr * 0.30) # Espacio proporcional justo abajo
+    # 2. Si no hay texto, devolvemos solo el QR limpio
+    if not texto_abajo:
+        return img_qr
+
+    # 3. Calcular espacio inferior para que el texto sea masivo
+    alto_texto_destinado = int(alto_qr * 0.35) 
     alto_total_lienzo = alto_qr + alto_texto_destinado
     
-<<<<<<< HEAD
-    # Crear el lienzo final adaptado al tamaño real del bloque (Fondo blanco puro)
+    # Crear lienzo final con fondo blanco puro
     imagen_final = Image.new('L', (ancho_qr, alto_total_lienzo), color=255)
-=======
-    # El QR ocupará el 65% del espacio vertical (unos 300 px) para dejar espacio abajo
-    tamano_qr = int(alto_total * 0.65)
-    img_qr_pil = img_qr_pil.resize((tamano_qr, tamano_qr), resample=Image.NEAREST)
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
-    
-    # Pegar el QR arriba (en la posición 0,0)
     imagen_final.paste(img_qr, (0, 0))
     
-    # 3. Dibujar el texto masivo pegado al QR
-    if texto_abajo:
-        draw = ImageDraw.Draw(imagen_final)
+    # 4. Dibujar las letras gigantescas pegadas al QR
+    draw = ImageDraw.Draw(imagen_final)
+    tamanio_fuente = int(ancho_qr * 0.13)  # Escala masiva respecto al ancho
+    
+    try:
+        font = ImageFont.truetype("arial.ttf", size=tamanio_fuente)
+    except IOError:
+        font = ImageFont.load_default()
         
-<<<<<<< HEAD
-        # Tamaño de fuente inicial masivo basado en el ancho del QR
-        tamanio_fuente = int(ancho_qr * 0.14) 
-=======
-        # Tamaño de fuente proporcional para el lienzo de 4cm (aprox. 45px de alto)
-        tamanio_fuente = int(resolucion * 0.095)
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
+    texto_limpio = texto_abajo.replace('\n', ' ').replace('\r', ' ').strip()
+    
+    # Calcular dimensiones para centrado perfecto
+    try:
+        bbox = draw.textbbox((0, 0), texto_limpio, font=font)
+        text_width = bbox[2] - bbox[0]
+    except AttributeError:
+        text_width, _ = font.getsize(texto_limpio)
         
+    # Reducir tamaño dinámicamente si el texto es más ancho que el QR
+    while text_width > (ancho_qr * 0.98) and tamanio_fuente > 12:
+        tamanio_fuente -= 2
         try:
-<<<<<<< HEAD
             font = ImageFont.truetype("arial.ttf", size=tamanio_fuente)
-=======
-            font_path = "arial.ttf" 
-            font = ImageFont.truetype(font_path, size=tamanio_fuente)
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
-        except IOError:
-            font = ImageFont.load_default()
-            
-        texto_limpio = texto_abajo.replace('\n', ' ').replace('\r', ' ').strip()
-        
-        # Calcular dimensiones del texto para el centrado
-        try:
             bbox = draw.textbbox((0, 0), texto_limpio, font=font)
             text_width = bbox[2] - bbox[0]
-            text_height = bbox[3] - bbox[1]
-        except AttributeError:
-            text_width, text_height = font.getsize(texto_limpio)
-<<<<<<< HEAD
-            
-        # Ajustar el tamaño si el texto llega a ser más ancho que el propio QR
-        while text_width > (ancho_qr * 0.98) and tamanio_fuente > 15:
-            tamanio_fuente -= 4
-=======
+        except:
+            break
 
-        # Reducir la fuente dinámicamente si el texto es muy largo para los 4 cm
-        while text_width > (ancho_total * 0.95) and tamanio_fuente > 12:
-            tamanio_fuente -= 2
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
-            try:
-                font = ImageFont.truetype("arial.ttf", size=tamanio_fuente)
-                bbox = draw.textbbox((0, 0), texto_limpio, font=font)
-                text_width = bbox[2] - bbox[0]
-                text_height = bbox[3] - bbox[1]
-            except:
-                break
-
-        # Centrado horizontal exacto respecto al QR
-        x_texto = (ancho_qr - text_width) // 2
-        
-<<<<<<< HEAD
-        # Posición Y: Inmediatamente abajo del QR con un mini margen para que no se toquen
-        y_texto = alto_qr + 5 
-        
-        # Dibujar las letras en negro puro
-=======
-        # Posición Y: Ubicado firmemente en el espacio inferior restante
-        y_texto = int(alto_total * 0.76) 
-
-        # Dibujar el texto en negro puro (0) sobre el fondo blanco
->>>>>>> 9b83c5baaa4a26ae9c3ec89443521d7a1c0e5765
-        draw.text((x_texto, y_texto), texto_limpio, fill=0, font=font)
-        
+    # Posicionar centrado e inmediatamente abajo del QR
+    x_texto = (ancho_qr - text_width) // 2
+    y_texto = alto_qr + 2  # Separación mínima de 2 píxeles
+    
+    draw.text((x_texto, y_texto), texto_limpio, fill=0, font=font)
+    
     return imagen_final
-
-
 
 
 
