@@ -13,7 +13,6 @@ st.set_page_config(
 
 # --- LÓGICA DE GENERACIÓN DE IMAGEN ---
  
-=======
 def generar_imagen_marcado(texto_qr, texto_abajo=None):
     """Genera una imagen compacta uniendo QR y texto para evitar el auto-recorte."""
     # 1. Configurar y generar el QR base
